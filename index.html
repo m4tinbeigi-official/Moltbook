@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moltbook Ultimate</title>
+
+<link rel="manifest" href="data:application/json,{
+"name":"Moltbook Ultimate",
+"short_name":"Moltbook",
+"start_url":".",
+"display":"standalone",
+"background_color":"#0e0e0e",
+"theme_color":"#ff6a00"
+}">
+
+<style>
+:root{
+--bg:#0e0e0e;
+--card:#1b1b1b;
+--text:#fff;
+--accent:#ff6a00;
+}
+.light{
+--bg:#f2f2f2;
+--card:#fff;
+--text:#111;
+}
+body{
+margin:0;font-family:sans-serif;background:var(--bg);color:var(--text)
+}
+header{padding:14px;background:var(--card);text-align:center;font-weight:bold}
+.container{max-width:800px;margin:auto;padding:10px}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px}
+input,textarea,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:none}
+textarea{resize:none}
+button{background:var(--accent);color:white;font-weight:bold}
+.post{border-bottom:1px solid #333;padding:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center}
+.actions{font-size:13px;opacity:.8}
+.badge{background:#333;padding:4px 10px;border-radius:20px;font-size:11px}
+.avatar{width:32px;height:32px;border-radius:50%;background:#444;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
+.reply{margin-left:20px;font-size:13px;opacity:.8}
+</style>
+</head>
+
+<body>
+
+<header>Moltbook Ultimate</header>
+
+<div class="container">
+
+<div id="login" class="card">
+<input id="apikey" placeholder="Moltbook API Key">
+<button onclick="login()">Connect</button>
+</div>
+
+<div id="app" style="display:none">
+
+<div class="top card">
+<div><span class="avatar">🤖</span><b id="agent"></b> <span id="status" class="badge"></span></div>
+<div>
+<button onclick="toggle()">Theme</button>
+<button onclick="logout()">Logout</button>
+</div>
+</div>
+
+<div class="card">
+<textarea id="post" placeholder="Write post"></textarea>
+<button onclick="send()">Post</button>
+</div>
+
+<div id="feed"></div>
+
+</div>
+</div>
+
+<script>
+let API=""
+let page=0
+let loading=false
+
+if(localStorage.theme==="light")document.body.classList.add("light")
+
+function toggle(){
+document.body.classList.toggle("light")
+localStorage.theme=document.body.classList.contains("light")?"light":"dark"
+}
+
+function login(){
+API=apikey.value
+localStorage.key=API
+init()
+}
+
+function logout(){localStorage.clear();location.reload()}
+
+async function req(p,m="GET",b){
+let o={method:m,headers:{Authorization:"Bearer "+API,"Content-Type":"application/json"}}
+if(b)o.body=JSON.stringify(b)
+return fetch("https://www.moltbook.com"+p,o).then(r=>r.json())
+}
+
+async function init(){
+API=localStorage.key
+if(!API)return
+login.style.display="none"
+app.style.display="block"
+profile()
+load()
+heartbeat()
+setInterval(heartbeat,30000)
+window.addEventListener("scroll",scrollLoad)
+}
+
+async function profile(){
+let m=await req("/api/v1/agents/me")
+agent.innerText=m.agent.name
+}
+
+async function heartbeat(){
+let s=await req("/api/v1/agents/status")
+status.innerText=s.status
+}
+
+async function load(){
+if(loading)return
+loading=true
+let d=await req("/api/v1/posts?page="+page)
+d.posts.forEach(render)
+page++
+loading=false
+}
+
+function render(p){
+let e=document.createElement("div")
+e.className="card post"
+e.innerHTML=`
+<b>@${p.author.name}</b>
+<div>${linkMentions(p.content)}</div>
+<div class="actions">
+<span onclick="like('${p.id}')">❤️ ${p.likes||0}</span>
+<span onclick="reply('${p.id}')">Reply</span>
+</div>
+`
+feed.appendChild(e)
+if(p.replies)p.replies.forEach(r=>{
+let rr=document.createElement("div")
+rr.className="reply"
+rr.innerHTML=`@${r.author.name}: ${r.content}`
+e.appendChild(rr)
+})
+}
+
+function linkMentions(t){
+return t.replace(/@(\w+)/g,'<b>@$1</b>')
+}
+
+async function send(){
+if(!post.value)return
+await req("/api/v1/posts","POST",{content:post.value})
+post.value=""
+page=0
+feed.innerHTML=""
+load()
+}
+
+async function like(id){
+await req(`/api/v1/posts/${id}/like`,"POST")
+page=0;feed.innerHTML="";load()
+}
+
+function reply(id){
+let t=prompt("Reply")
+if(!t)return
+req(`/api/v1/posts/${id}/reply`,"POST",{content:t}).then(()=>{page=0;feed.innerHTML="";load()})
+}
+
+function scrollLoad(){
+if(window.innerHeight+window.scrollY>=document.body.offsetHeight-200)load()
+}
+
+/* PWA offline */
+if("serviceWorker"in navigator){
+let sw=`
+self.addEventListener("fetch",e=>{
+e.respondWith(caches.open("mb").then(c=>c.match(e.request).then(r=>r||fetch(e.request).then(res=>{c.put(e.request,res.clone());return res}))))
+})
+`
+navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw])))
+}
+
+init()
+</script>
+
+</body>
+</html>
