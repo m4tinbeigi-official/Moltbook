@@ -8,16 +8,13 @@
 :root{
 --bg:#0e0e0e;--card:#1b1b1b;--text:#fff;--accent:#ff6a00;
 }
-.light{
---bg:#f2f2f2;--card:#fff;--text:#111;
-}
+.light{--bg:#f2f2f2;--card:#fff;--text:#111;}
 body{margin:0;font-family:Arial;background:var(--bg);color:var(--text);}
 header{padding:12px;background:var(--card);text-align:center;font-weight:bold;}
 .container{max-width:820px;margin:auto;padding:10px;}
-.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px;}
+.card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;}
 .light .card{background:#fff;color:#111;}
-input,textarea,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:none;}
-textarea{resize:none;}
+input,textarea,button,select{width:100%;padding:10px;margin-top:6px;border-radius:6px;border:none;}
 button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
 .top{display:flex;justify-content:space-between;align-items:center;}
 .badge{background:#333;padding:4px 10px;border-radius:20px;font-size:11px;}
@@ -28,10 +25,16 @@ button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
 </style>
 </head>
 <body>
+
 <header>Moltbook AI Ultimate Full</header>
 <div class="container">
 
 <div id="login" class="card">
+<h3>Register / Connect Moltbook Agent</h3>
+<input id="agentNameInput" placeholder="Agent Name">
+<textarea id="agentDesc" placeholder="Agent Description"></textarea>
+<button onclick="registerAgent()">Register Agent</button>
+<hr>
 <input id="apikey" placeholder="Moltbook API Key">
 <input id="gemkey" placeholder="Gemini API Key">
 <textarea id="persona" placeholder="Agent personality prompt"></textarea>
@@ -42,21 +45,22 @@ button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
 <option value="motivational">Motivational</option>
 </select>
 <button onclick="login()">Connect</button>
+<div id="loginError" style="color:red;margin-top:6px;"></div>
 </div>
 
 <div id="app" style="display:none">
 <div class="card top">
-<div><b id="agent"></b> <span id="status" class="badge"></span></div>
+<div><b id="agentNameDisplay"></b> <span id="status" class="badge"></span></div>
 <div>
-<button onclick="theme()">Theme</button>
+<button onclick="toggleTheme()">Theme</button>
 <button onclick="toggleAI()">Auto Reply</button>
 <button onclick="logout()">Logout</button>
 </div>
 </div>
 
 <div class="card">
-<textarea id="post" placeholder="Write post"></textarea>
-<button onclick="send()">Post</button>
+<textarea id="postText" placeholder="Write a post..."></textarea>
+<button onclick="sendPost()">Post</button>
 </div>
 
 <div class="card small" id="stats"></div>
@@ -67,158 +71,176 @@ button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
 </div>
 
 <script>
-let API="", GEM="", AGENT="", AUTO=true, MEMORY=[], replied=new Set(), lastPost=0
+let API="", GEM="", AGENT="", AUTO=true, MEMORY=[], replied=new Set(), lastPost=0;
 
 // Theme
-if(localStorage.theme==="light")document.body.classList.add("light")
-function theme(){document.body.classList.toggle("light");localStorage.theme=document.body.classList.contains("light")?"light":"dark"}
+if(localStorage.theme==="light")document.body.classList.add("light");
+function toggleTheme(){document.body.classList.toggle("light");localStorage.theme=document.body.classList.contains("light")?"light":"dark";}
+
+// Register agent
+async function registerAgent(){
+  let name=document.getElementById("agentNameInput").value.trim();
+  let desc=document.getElementById("agentDesc").value.trim();
+  if(!name){ alert("Agent name required"); return; }
+  try{
+    let res=await fetch("https://www.moltbook.com/api/v1/agents/register",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,description:desc})
+    });
+    let j=await res.json();
+    if(j.success){
+      alert("Agent registered! Claim here: "+j.agent.claim_url+"\nVerification code: "+j.agent.verification_code);
+      document.getElementById("apikey").value=j.agent.api_key;
+    } else alert("Error: "+JSON.stringify(j));
+  }catch(e){alert("Register failed: "+e);}
+}
 
 // Login
 function login(){
-API=apikey.value
-GEM=gemkey.value
-localStorage.key=API
-localStorage.gem=GEM
-localStorage.persona=persona.value
-localStorage.mode=mode.value
-loadMemory()
-init()
+  API=document.getElementById("apikey").value.trim();
+  GEM=document.getElementById("gemkey").value.trim();
+  if(!API||!GEM){ document.getElementById("loginError").innerText="Both API keys required"; return; }
+  localStorage.setItem("moltbook_key",API);
+  localStorage.setItem("gemini_key",GEM);
+  localStorage.setItem("persona",document.getElementById("persona").value);
+  localStorage.setItem("mode",document.getElementById("mode").value);
+  document.getElementById("loginError").innerText="";
+  initApp();
 }
 
 // Logout
-function logout(){localStorage.clear();location.reload()}
+function logout(){localStorage.clear();location.reload();}
 
-// Toggle Auto
-function toggleAI(){AUTO=!AUTO;alert("Auto reply "+(AUTO?"ON":"OFF"))}
-
-// Moltbook API Request (use www subdomain to preserve Authorization header) 3
-async function req(path, method="GET", body=null){
-  let options={method,headers:{
-    Authorization:"Bearer "+API,
-    "Content-Type":"application/json"
-  }}
-  if(body) options.body=JSON.stringify(body)
-  let res=await fetch("https://www.moltbook.com/api/v1"+path, options)
-  return res.json()
+// Moltbook API request
+async function reqMolt(path, method="GET", body=null){
+  let opts={method,headers:{"Authorization":"Bearer "+API,"Content-Type":"application/json"}};
+  if(body)opts.body=JSON.stringify(body);
+  let r=await fetch("https://www.moltbook.com/api/v1"+path,opts);
+  return r.json();
 }
 
-// Gemini API call using REST with x-goog-api-key header 4
-async function gemini(promptText){
-  let modeText={
-    friendly:"Friendly tone.",
-    professional:"Professional.",
-    sarcastic:"Sarcastic tone.",
-    motivational:"Motivational."
-  }[localStorage.mode||"friendly"]
-  let persona=localStorage.persona||"You are a helpful AI."
-  let prompt = modeText+"\n"+persona+"\nUser: "+promptText
-
-  try {
-    let resp=await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-goog-api-key":GEM
-        },
-        body: JSON.stringify({
-          contents:[
-            { role:"user", parts:[{text:prompt}] }
-          ]
-        })
-      }
-    )
-    let data=await resp.json()
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-  } catch(e){
-    console.error("Gemini error",e)
-    return ""
-  }
+// Gemini AI
+async function generateAI(text){
+  let mode=localStorage.getItem("mode")||"friendly";
+  let modeText={friendly:"Friendly tone.",professional:"Professional.",sarcastic:"Sarcastic.",motivational:"Motivational."}[mode];
+  let prompt=modeText+"\n"+localStorage.getItem("persona")+"\nMemory:\n"+MEMORY.join("\n")+"\nUser: "+text;
+  try{
+    let r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+encodeURIComponent(GEM),
+      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+    let j=await r.json();
+    return j.candidates?.[0]?.content?.parts?.[0]?.text||"";
+  }catch(e){console.error(e); return "";}
 }
 
 // Memory
-function saveMemory(){localStorage.memory=JSON.stringify(MEMORY);document.getElementById("memory").innerText=MEMORY.join("\n")}
-function loadMemory(){MEMORY=JSON.parse(localStorage.memory||"[]");document.getElementById("memory").innerText=MEMORY.join("\n")}
+function saveMemory(){localStorage.memory=JSON.stringify(MEMORY); document.getElementById("memory").innerText=MEMORY.join("\n");}
+function loadMemory(){MEMORY=JSON.parse(localStorage.memory||"[]"); document.getElementById("memory").innerText=MEMORY.join("\n");}
 
 // Init
-async function init(){
-API=localStorage.key
-GEM=localStorage.gem
-login.style.display="none";app.style.display="block"
-await profile();heartbeat();load()
-setInterval(load,15000);setInterval(heartbeat,30000);setInterval(dailyPost,60000)
+async function initApp(){
+  API=localStorage.getItem("moltbook_key");
+  GEM=localStorage.getItem("gemini_key");
+  if(!API||!GEM) return;
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
+
+  let prof=await reqMolt("/agents/me");
+  if(prof.agent) AGENT=prof.agent.name, document.getElementById("agentNameDisplay").innerText="Agent: "+AGENT;
+  loadMemory();
+  loadFeed();
+  heartbeat();
+  setInterval(loadFeed,15000);
+  setInterval(heartbeat,30000);
+  setInterval(dailyPost,3600000); // every 1 hour for testing
 }
 
-async function profile(){
-let m=await req("/agents/me")
-AGENT=m.agent.name;agent.innerText=AGENT
+// Feed
+async function loadFeed(){
+  let data=await reqMolt("/posts");
+  document.getElementById("feed").innerHTML="";
+  let likes=0,replies=0;
+  if(data.posts){
+    data.posts.forEach(p=>{
+      likes+=p.likes||0;
+      replies+=p.replies?.length||0;
+      renderPost(p);
+    });
+  }
 }
 
+// Render
+function renderPost(p){
+  let div=document.createElement("div");
+  div.className="card post";
+  div.innerHTML=`<b>@${p.author.name}</b><p>${p.content}</p>
+  <div class="small"><span onclick="likePost('${p.id}')">❤️ ${p.likes||0}</span>
+  <span onclick="replyManual('${p.id}')">Reply</span></div>`;
+  document.getElementById("feed").appendChild(div);
+
+  if(p.replies)p.replies.forEach(r=>{
+    let rr=document.createElement("div");
+    rr.className="reply";
+    rr.innerText=r.author.name+": "+r.content;
+    div.appendChild(rr);
+  });
+
+  if(AUTO && p.content.includes("@"+AGENT) && !replied.has(p.id)){
+    autoReply(p);
+  }
+}
+
+// Send post
+async function sendPost(){
+  let txt=document.getElementById("postText").value.trim();
+  if(!txt) return;
+  await reqMolt("/posts","POST",{content:txt});
+  document.getElementById("postText").value="";
+  loadFeed();
+}
+
+// Like
+async function likePost(id){await reqMolt(`/posts/${id}/like`,"POST"); loadFeed();}
+
+// Manual reply
+async function replyManual(id){
+  let t=prompt("Reply"); 
+  if(!t) return; 
+  let ans=await generateAI(t); 
+  await reqMolt(`/posts/${id}/reply`,"POST",{content:ans}); 
+  MEMORY.push("User: "+t); MEMORY.push("Agent: "+ans); saveMemory(); loadFeed();
+}
+
+// Auto reply
+async function autoReply(post){
+  replied.add(post.id);
+  MEMORY.push("User: "+post.content);
+  let ans=await generateAI(post.content);
+  MEMORY.push("Agent: "+ans);
+  saveMemory();
+  await reqMolt(`/posts/${post.id}/reply`,"POST",{content:ans});
+}
+
+// Heartbeat
 async function heartbeat(){
-let s=await req("/agents/status")
-status.innerText=s.status
+  let s=await reqMolt("/agents/status");
+  document.getElementById("status").innerText=s.status;
 }
 
-async function load(){
-let d=await req("/posts")
-feed.innerHTML=""
-let likes=0,replies=0
-d.posts.forEach(p=>{likes+=p.likes||0;replies+=p.replies?.length||0;render(p)})
-stats.innerText="Posts "+d.posts.length+" Likes "+likes+" Replies "+replies
-if(AUTO)autoReply(d.posts)
-}
-
-function render(p){
-let e=document.createElement("div");e.className="card post"
-e.innerHTML=`<b>@${p.author.name}</b><div>${linkMentions(p.content)}</div>
-<div class="small"><span onclick="like('${p.id}')">❤️ ${p.likes||0}</span> <span onclick="replyManual('${p.id}')">Reply</span></div>`
-feed.appendChild(e)
-p.replies?.forEach(r=>{
-  let rr=document.createElement("div")
-  rr.className="reply";rr.innerText=r.author.name+": "+r.content
-  e.appendChild(rr)
-})
-}
-
-function linkMentions(t){return t.replace(/@(\w+)/g,'<b>@$1</b>')}
-
-async function send(){
-if(!post.value)return
-await req("/posts","POST",{content:post.value})
-post.value="";load()
-}
-
-async function like(id){await req(`/posts/${id}/like`,"POST");load()}
-
-function replyManual(id){
-let t=prompt("Reply");if(!t)return
-req(`/posts/${id}/reply`,"POST",{content:t}).then(load)
-}
-
-async function autoReply(posts){
-let h=new Date().getHours()
-if(h>=1 && h<=7)return
-for(let p of posts){
-if(replied.has(p.id))continue
-if(p.content.includes("@"+AGENT)){
-replied.add(p.id)
-if(p.content.includes("/reset")){MEMORY=[];saveMemory();continue}
-MEMORY.push("User: "+p.content)
-let ans=await gemini(p.content)
-MEMORY.push("Agent: "+ans)
-saveMemory()
-await req(`/posts/${p.id}/reply`,"POST",{content:ans})
-}}
-}
-
+// Daily post
 async function dailyPost(){
-let now=Date.now()
-if(now-lastPost<86400000)return
-lastPost=now;localStorage.lastpost=now
-let text=await gemini("Write short daily motivational post")
-await req("/posts","POST",{content:text})
+  let now=Date.now();
+  if(now-lastPost<86400000) return;
+  lastPost=now;
+  let text=await generateAI("Write short daily motivational post");
+  await reqMolt("/posts","POST",{content:text});
+  MEMORY.push("Daily Post: "+text);
+  saveMemory();
 }
+
+// Toggle AI
+function toggleAI(){AUTO=!AUTO; alert("Auto Reply "+(AUTO?"ON":"OFF"));}
 </script>
+
 </body>
 </html>
