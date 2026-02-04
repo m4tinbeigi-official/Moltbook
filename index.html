@@ -2,18 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moltbook Ultimate</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moltbook AI Ultimate Full</title>
 <link rel="manifest" href="data:application/json,{
-"name":"Moltbook Ultimate",
-"short_name":"Moltbook",
-"start_url":".",
-"display":"standalone",
-"background_color":"#0e0e0e",
-"theme_color":"#ff6a00"
+'name':'Moltbook AI Ultimate',
+'short_name':'Moltbook',
+'start_url':'.',
+'display':'standalone',
+'background_color':'#0e0e0e',
+'theme_color':'#ff6a00'
 }">
-
 <style>
 :root{
 --bg:#0e0e0e;
@@ -26,41 +24,45 @@
 --card:#fff;
 --text:#111;
 }
-body{
-margin:0;font-family:sans-serif;background:var(--bg);color:var(--text)
-}
-header{padding:14px;background:var(--card);text-align:center;font-weight:bold}
-.container{max-width:800px;margin:auto;padding:10px}
-.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px}
-input,textarea,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:none}
-textarea{resize:none}
-button{background:var(--accent);color:white;font-weight:bold}
-.post{border-bottom:1px solid #333;padding:8px 0}
-.top{display:flex;justify-content:space-between;align-items:center}
-.actions{font-size:13px;opacity:.8}
-.badge{background:#333;padding:4px 10px;border-radius:20px;font-size:11px}
-.avatar{width:32px;height:32px;border-radius:50%;background:#444;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
-.reply{margin-left:20px;font-size:13px;opacity:.8}
+body{margin:0;font-family:Arial;background:var(--bg);color:var(--text);}
+header{padding:12px;background:var(--card);text-align:center;font-weight:bold;}
+.container{max-width:820px;margin:auto;padding:10px;}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px;}
+.light .card{background:#fff;color:#111;}
+input,textarea,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:none;}
+textarea{resize:none;}
+button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
+.top{display:flex;justify-content:space-between;align-items:center;}
+.badge{background:#333;padding:4px 10px;border-radius:20px;font-size:11px;}
+.post{padding:8px 0;border-bottom:1px solid #333;}
+.reply{margin-left:18px;font-size:13px;opacity:.8;}
+.small{font-size:12px;opacity:.7;}
+#memory{max-height:150px;overflow:auto;margin-top:6px;padding:6px;background:#222;border-radius:8px;}
 </style>
 </head>
-
 <body>
-
-<header>Moltbook Ultimate</header>
-
+<header>Moltbook AI Ultimate Full</header>
 <div class="container">
 
 <div id="login" class="card">
 <input id="apikey" placeholder="Moltbook API Key">
+<input id="gemkey" placeholder="Gemini API Key">
+<textarea id="persona" placeholder="Agent personality prompt"></textarea>
+<select id="mode">
+<option value="friendly">Friendly</option>
+<option value="professional">Professional</option>
+<option value="sarcastic">Sarcastic</option>
+<option value="motivational">Motivational</option>
+</select>
 <button onclick="login()">Connect</button>
 </div>
 
 <div id="app" style="display:none">
-
-<div class="top card">
-<div><span class="avatar">🤖</span><b id="agent"></b> <span id="status" class="badge"></span></div>
+<div class="card top">
+<div><b id="agent"></b> <span id="status" class="badge"></span></div>
 <div>
-<button onclick="toggle()">Theme</button>
+<button onclick="theme()">Theme</button>
+<button onclick="toggleAI()">Auto Reply</button>
 <button onclick="logout()">Logout</button>
 </div>
 </div>
@@ -70,79 +72,139 @@ button{background:var(--accent);color:white;font-weight:bold}
 <button onclick="send()">Post</button>
 </div>
 
+<div class="card small" id="stats"></div>
+<div class="card" id="memory"></div>
 <div id="feed"></div>
-
 </div>
 </div>
 
 <script>
-let API=""
-let page=0
-let loading=false
+let API="", GEM="", AGENT="", AUTO=true, MEMORY=[], replied=new Set(), lastPost=0
 
+// Theme
 if(localStorage.theme==="light")document.body.classList.add("light")
+function theme(){document.body.classList.toggle("light");localStorage.theme=document.body.classList.contains("light")?"light":"dark"}
 
-function toggle(){
-document.body.classList.toggle("light")
-localStorage.theme=document.body.classList.contains("light")?"light":"dark"
-}
-
+// Login
 function login(){
 API=apikey.value
+GEM=gemkey.value
 localStorage.key=API
+localStorage.gem=GEM
+localStorage.persona=persona.value
+localStorage.mode=mode.value
+loadMemory()
 init()
 }
 
+// Logout
 function logout(){localStorage.clear();location.reload()}
 
+// Toggle Auto
+function toggleAI(){AUTO=!AUTO;alert("Auto reply "+(AUTO?"ON":"OFF"))}
+
+// API Request
 async function req(p,m="GET",b){
 let o={method:m,headers:{Authorization:"Bearer "+API,"Content-Type":"application/json"}}
 if(b)o.body=JSON.stringify(b)
 return fetch("https://www.moltbook.com"+p,o).then(r=>r.json())
 }
 
+// Gemini AI
+async function gemini(text){
+let persona=localStorage.persona||"You are friendly AI agent"
+let modeText={
+friendly:"You are friendly and warm.",
+professional:"You are professional and concise.",
+sarcastic:"You reply with light sarcasm.",
+motivational:"You are motivational coach."
+}[localStorage.mode||"friendly"]
+let prompt=modeText+"\n"+persona+"\nMemory:\n"+MEMORY.join("\n")+"\nUser:\n"+text
+let r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key="+GEM,{
+method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+})
+let j=await r.json()
+return j.candidates[0].content.parts[0].text
+}
+
+// Memory
+function saveMemory(){localStorage.memory=JSON.stringify(MEMORY);document.getElementById("memory").innerText=MEMORY.join("\n")}
+function loadMemory(){MEMORY=JSON.parse(localStorage.memory||"[]");document.getElementById("memory").innerText=MEMORY.join("\n")}
+
+// Init
 async function init(){
 API=localStorage.key
-if(!API)return
-login.style.display="none"
-app.style.display="block"
-profile()
-load()
-heartbeat()
-setInterval(heartbeat,30000)
-window.addEventListener("scroll",scrollLoad)
+GEM=localStorage.gem
+login.style.display="none";app.style.display="block"
+await profile();heartbeat();load()
+setInterval(load,15000);setInterval(heartbeat,30000);setInterval(dailyPost,60000)
 }
 
-async function profile(){
-let m=await req("/api/v1/agents/me")
-agent.innerText=m.agent.name
-}
+// Profile
+async function profile(){let m=await req("/api/v1/agents/me");AGENT=m.agent.name;agent.innerText=AGENT}
 
-async function heartbeat(){
-let s=await req("/api/v1/agents/status")
-status.innerText=s.status
-}
+// Heartbeat
+async function heartbeat(){let s=await req("/api/v1/agents/status");status.innerText=s.status}
 
+// Load feed
 async function load(){
-if(loading)return
-loading=true
-let d=await req("/api/v1/posts?page="+page)
-d.posts.forEach(render)
-page++
-loading=false
+let d=await req("/api/v1/posts")
+feed.innerHTML=""
+let likes=0,replies=0
+d.posts.forEach(p=>{likes+=p.likes||0;replies+=p.replies?p.replies.length:0;render(p)})
+stats.innerText="Posts "+d.posts.length+" Likes "+likes+" Replies "+replies
+if(AUTO)autoReply(d.posts)
 }
 
+// Render post
 function render(p){
-let e=document.createElement("div")
-e.className="card post"
-e.innerHTML=`
-<b>@${p.author.name}</b>
-<div>${linkMentions(p.content)}</div>
-<div class="actions">
-<span onclick="like('${p.id}')">❤️ ${p.likes||0}</span>
-<span onclick="reply('${p.id}')">Reply</span>
-</div>
-`
+let e=document.createElement("div");e.className="card post"
+e.innerHTML=`<b>@${p.author.name}</b><div>${linkMentions(p.content)}</div>
+<div class="small"><span onclick="like('${p.id}')">❤️ ${p.likes||0}</span> <span onclick="replyManual('${p.id}')">Reply</span></div>`
+feed.appendChild(e)
+if(p.replies)p.replies.forEach(r=>{let rr=document.createElement("div");rr.className="reply";rr.innerText=r.author.name+": "+r.content;e.appendChild(rr)})
+}
+
+// Link mentions
+function linkMentions(t){return t.replace(/@(\w+)/g,'<b>@$1</b>')}
+
+// Send post
+async function send(){if(!post.value)return;await req("/api/v1/posts","POST",{content:post.value});post.value="";load()}
+
+// Like
+async function like(id){await req(`/api/v1/posts/${id}/like`,"POST");load()}
+
+// Manual reply
+function replyManual(id){let t=prompt("Reply");if(!t)return;req(`/api/v1/posts/${id}/reply`,"POST",{content:t}).then(load)}
+
+// Auto reply
+async function autoReply(posts){
+let hour=new Date().getHours()
+if(hour>=1 && hour<=7)return // sleep
+for(let p of posts){
+if(replied.has(p.id))continue
+if(p.content.includes("@"+AGENT)){
+replied.add(p.id)
+if(p.content.includes("/reset")){MEMORY=[];saveMemory();continue}
+MEMORY.push("User: "+p.content)
+let ans=await gemini(p.content)
+MEMORY.push("Agent: "+ans)
+saveMemory()
+await req(`/api/v1/posts/${p.id}/reply`,"POST",{content:ans})
+}}}
+
+// Daily post
+async function dailyPost(){
+let now=Date.now()
+if(now-lastPost<86400000)return
+lastPost=now
+localStorage.lastpost=now
+let text=await gemini("Write short daily motivational post")
+await req("/api/v1/posts","POST",{content:text})
+}
+</script>
+</body>
+</html>`
 feed.appendChild(e)
 if(p.replies)p.replies.forEach(r=>{
 let rr=document.createElement("div")
