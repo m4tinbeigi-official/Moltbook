@@ -3,243 +3,315 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moltbook AI Ultimate Full</title>
+<title>Moltbook AI Pro Client</title>
 <style>
-:root{
---bg:#0e0e0e;--card:#1b1b1b;--text:#fff;--accent:#ff6a00;
+:root {
+  --bg:#0e0e0e;
+  --card:#1b1b1b;
+  --text:#fff;
+  --accent:#ff6a00;
 }
-.light{--bg:#f2f2f2;--card:#fff;--text:#111;}
-body{margin:0;font-family:Arial;background:var(--bg);color:var(--text);}
-header{padding:12px;background:var(--card);text-align:center;font-weight:bold;}
-.container{max-width:820px;margin:auto;padding:10px;}
-.card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;}
-.light .card{background:#fff;color:#111;}
-input,textarea,button,select{width:100%;padding:10px;margin-top:6px;border-radius:6px;border:none;}
-button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
-.top{display:flex;justify-content:space-between;align-items:center;}
-.badge{background:#333;padding:4px 10px;border-radius:20px;font-size:11px;}
-.post{padding:8px 0;border-bottom:1px solid #333;}
-.reply{margin-left:18px;font-size:13px;opacity:.8;}
-.small{font-size:12px;opacity:.7;}
-#memory{max-height:150px;overflow:auto;margin-top:6px;padding:6px;background:#222;border-radius:8px;}
+.light {
+  --bg:#f2f2f2;
+  --card:#fff;
+  --text:#111;
+}
+body {
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+header {
+  padding:12px;
+  background:var(--card);
+  text-align:center;
+  font-weight:bold;
+  font-size:1.4em;
+}
+.container {
+  max-width:900px;
+  margin:auto;
+  padding:10px;
+}
+.card {
+  background:var(--card);
+  border-radius:10px;
+  padding:12px;
+  margin-bottom:10px;
+}
+.light .card {
+  background:#fff;
+  color:var(--text);
+}
+input,textarea,select,button {
+  width:100%;
+  padding:10px;
+  margin-top:8px;
+  border-radius:6px;
+  border:none;
+}
+button {
+  background:var(--accent);
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+}
+.feed-post {
+  border-bottom:1px solid #444;
+  padding:8px 0;
+}
+.small {
+  font-size:0.85em;
+  opacity:0.75;
+}
+code {
+  background:#222;
+  color:white;
+  padding:4px;
+  border-radius:4px;
+  display:block;
+  margin-top:4px;
+  font-size:0.9em;
+}
+a {
+  color:var(--accent);
+}
 </style>
 </head>
 <body>
 
-<header>Moltbook AI Ultimate Full</header>
+<header>Moltbook AI Ultimate Pro</header>
 <div class="container">
 
-<div id="login" class="card">
-<h3>Register / Connect Moltbook Agent</h3>
-<input id="agentNameInput" placeholder="Agent Name">
-<textarea id="agentDesc" placeholder="Agent Description"></textarea>
-<button onclick="registerAgent()">Register Agent</button>
-<hr>
-<input id="apikey" placeholder="Moltbook API Key">
-<input id="gemkey" placeholder="Gemini API Key">
-<textarea id="persona" placeholder="Agent personality prompt"></textarea>
-<select id="mode">
-<option value="friendly">Friendly</option>
-<option value="professional">Professional</option>
-<option value="sarcastic">Sarcastic</option>
-<option value="motivational">Motivational</option>
-</select>
-<button onclick="login()">Connect</button>
-<div id="loginError" style="color:red;margin-top:6px;"></div>
+<div id="loginCard" class="card">
+  <h3>Register / Activate Your Agent</h3>
+  <input id="agentName" placeholder="Agent Name">
+  <textarea id="agentDesc" placeholder="Agent Description"></textarea>
+  <button onclick="registerAgent()">Register Agent</button>
+  <div id="claimOutput" class="small"></div>
+  <hr>
+
+  <input id="apikey" placeholder="Moltbook API Key">
+  <input id="gemkey" placeholder="Gemini API Key">
+  <textarea id="persona" placeholder="Agent Personality (e.g., friendly helper)"></textarea>
+  <select id="mode">
+    <option value="friendly">Friendly</option>
+    <option value="professional">Professional</option>
+    <option value="sarcastic">Sarcastic</option>
+    <option value="motivational">Motivational</option>
+  </select>
+  <button onclick="connectAgent()">Connect</button>
+  <div id="loginError" class="small" style="color:red;"></div>
 </div>
 
-<div id="app" style="display:none">
-<div class="card top">
-<div><b id="agentNameDisplay"></b> <span id="status" class="badge"></span></div>
-<div>
-<button onclick="toggleTheme()">Theme</button>
-<button onclick="toggleAI()">Auto Reply</button>
-<button onclick="logout()">Logout</button>
-</div>
-</div>
+<div id="appCard" style="display:none">
 
-<div class="card">
-<textarea id="postText" placeholder="Write a post..."></textarea>
-<button onclick="sendPost()">Post</button>
-</div>
+  <div class="card">
+    <div><b>Agent:</b> <span id="agentStatus"></span></div>
+    <div class="small" id="heartbeat">Checking status...</div>
+    <button onclick="toggleTheme()">Toggle Theme</button>
+  </div>
 
-<div class="card small" id="stats"></div>
-<div class="card" id="memory"></div>
-<div id="feed"></div>
+  <div class="card">
+    <textarea id="postInput" placeholder="Write your post..."></textarea>
+    <button onclick="submitPost()">Post</button>
+  </div>
+
+  <div id="feedStats" class="card small"></div>
+
+  <div class="card">
+    <div class="small">Memory Log</div>
+    <div id="memoryDisplay"></div>
+  </div>
+
+  <div id="feedContainer"></div>
+
 </div>
 
 </div>
 
 <script>
-let API="", GEM="", AGENT="", AUTO=true, MEMORY=[], replied=new Set(), lastPost=0;
+// State
+let API_KEY="", GEM_KEY="", AGENT_NAME="";
+let MEMORY = [], repliedSet = new Set(), lastDaily=0;
 
-// Theme
-if(localStorage.theme==="light")document.body.classList.add("light");
-function toggleTheme(){document.body.classList.toggle("light");localStorage.theme=document.body.classList.contains("light")?"light":"dark";}
+// Load theme & memory
+if(localStorage.theme==="light") document.body.classList.add("light");
+function saveMemory(){localStorage.memory=JSON.stringify(MEMORY); updateMemoryUI();}
+function loadMemory(){MEMORY = JSON.parse(localStorage.memory||"[]"); updateMemoryUI();}
+function updateMemoryUI(){document.getElementById("memoryDisplay").innerText=MEMORY.join("\n");}
 
-// Register agent
-async function registerAgent(){
-  let name=document.getElementById("agentNameInput").value.trim();
-  let desc=document.getElementById("agentDesc").value.trim();
-  if(!name){ alert("Agent name required"); return; }
-  try{
-    let res=await fetch("https://www.moltbook.com/api/v1/agents/register",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({name,description:desc})
-    });
-    let j=await res.json();
-    if(j.success){
-      alert("Agent registered! Claim here: "+j.agent.claim_url+"\nVerification code: "+j.agent.verification_code);
-      document.getElementById("apikey").value=j.agent.api_key;
-    } else alert("Error: "+JSON.stringify(j));
-  }catch(e){alert("Register failed: "+e);}
-}
-
-// Login
-function login(){
-  API=document.getElementById("apikey").value.trim();
-  GEM=document.getElementById("gemkey").value.trim();
-  if(!API||!GEM){ document.getElementById("loginError").innerText="Both API keys required"; return; }
-  localStorage.setItem("moltbook_key",API);
-  localStorage.setItem("gemini_key",GEM);
-  localStorage.setItem("persona",document.getElementById("persona").value);
-  localStorage.setItem("mode",document.getElementById("mode").value);
-  document.getElementById("loginError").innerText="";
-  initApp();
-}
-
-// Logout
-function logout(){localStorage.clear();location.reload();}
-
-// Moltbook API request
-async function reqMolt(path, method="GET", body=null){
-  let opts={method,headers:{"Authorization":"Bearer "+API,"Content-Type":"application/json"}};
-  if(body)opts.body=JSON.stringify(body);
+// Moltbook API wrapper
+async function moltReq(path,method="GET",body=null){
+  let opts={method,headers:{
+    "Authorization":"Bearer "+API_KEY,
+    "Content-Type":"application/json"
+  }};
+  if(body) opts.body=JSON.stringify(body);
   let r=await fetch("https://www.moltbook.com/api/v1"+path,opts);
   return r.json();
 }
 
-// Gemini AI
-async function generateAI(text){
-  let mode=localStorage.getItem("mode")||"friendly";
-  let modeText={friendly:"Friendly tone.",professional:"Professional.",sarcastic:"Sarcastic.",motivational:"Motivational."}[mode];
-  let prompt=modeText+"\n"+localStorage.getItem("persona")+"\nMemory:\n"+MEMORY.join("\n")+"\nUser: "+text;
-  try{
-    let r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+encodeURIComponent(GEM),
-      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
-    let j=await r.json();
-    return j.candidates?.[0]?.content?.parts?.[0]?.text||"";
-  }catch(e){console.error(e); return "";}
-}
-
-// Memory
-function saveMemory(){localStorage.memory=JSON.stringify(MEMORY); document.getElementById("memory").innerText=MEMORY.join("\n");}
-function loadMemory(){MEMORY=JSON.parse(localStorage.memory||"[]"); document.getElementById("memory").innerText=MEMORY.join("\n");}
-
-// Init
-async function initApp(){
-  API=localStorage.getItem("moltbook_key");
-  GEM=localStorage.getItem("gemini_key");
-  if(!API||!GEM) return;
-  document.getElementById("login").style.display="none";
-  document.getElementById("app").style.display="block";
-
-  let prof=await reqMolt("/agents/me");
-  if(prof.agent) AGENT=prof.agent.name, document.getElementById("agentNameDisplay").innerText="Agent: "+AGENT;
-  loadMemory();
-  loadFeed();
-  heartbeat();
-  setInterval(loadFeed,15000);
-  setInterval(heartbeat,30000);
-  setInterval(dailyPost,3600000); // every 1 hour for testing
-}
-
-// Feed
-async function loadFeed(){
-  let data=await reqMolt("/posts");
-  document.getElementById("feed").innerHTML="";
-  let likes=0,replies=0;
-  if(data.posts){
-    data.posts.forEach(p=>{
-      likes+=p.likes||0;
-      replies+=p.replies?.length||0;
-      renderPost(p);
-    });
-  }
-}
-
-// Render
-function renderPost(p){
-  let div=document.createElement("div");
-  div.className="card post";
-  div.innerHTML=`<b>@${p.author.name}</b><p>${p.content}</p>
-  <div class="small"><span onclick="likePost('${p.id}')">❤️ ${p.likes||0}</span>
-  <span onclick="replyManual('${p.id}')">Reply</span></div>`;
-  document.getElementById("feed").appendChild(div);
-
-  if(p.replies)p.replies.forEach(r=>{
-    let rr=document.createElement("div");
-    rr.className="reply";
-    rr.innerText=r.author.name+": "+r.content;
-    div.appendChild(rr);
+// Register agent
+async function registerAgent(){
+  const name=document.getElementById("agentName").value.trim();
+  const desc=document.getElementById("agentDesc").value.trim();
+  if(!name) return alert("Name required");
+  let res=await fetch("https://www.moltbook.com/api/v1/agents/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name,description:desc})
   });
+  let j=await res.json();
+  if(j.agent){
+    document.getElementById("claimOutput").innerHTML=
+      `<b>API Key:</b> <code>${j.agent.api_key}</code><br>
+       <b>Claim Link:</b> <a href="${j.agent.claim_url}" target="_blank">${j.agent.claim_url}</a><br>
+       <b>Tweet this verification:</b>
+       <code>I'm claiming my AI agent \"${name}\" on @moltbook 🦞 Verification: ${j.agent.verification_code}</code>`;
+    document.getElementById("apikey").value=j.agent.api_key;
+  } else alert("Error registering");
+}
 
-  if(AUTO && p.content.includes("@"+AGENT) && !replied.has(p.id)){
-    autoReply(p);
+// Connect + check active
+function connectAgent(){
+  API_KEY=document.getElementById("apikey").value.trim();
+  GEM_KEY=document.getElementById("gemkey").value.trim();
+  if(!API_KEY||!GEM_KEY){document.getElementById("loginError").innerText="Both keys required";return;}
+  localStorage.setItem("moltbook_key",API_KEY);
+  localStorage.setItem("gemini_key",GEM_KEY);
+  localStorage.setItem("persona",document.getElementById("persona").value);
+  localStorage.setItem("mode",document.getElementById("mode").value);
+  loadMemory(); checkActive();
+}
+
+// Check agent status
+async function checkActive(){
+  let st=await moltReq("/agents/status");
+  if(st.status==="active"){
+    AGENT_NAME=st.agent.name;
+    startApp();
+  } else {
+    document.getElementById("loginError").innerText="Agent not active. Tweet verification & reload.";
   }
 }
 
-// Send post
-async function sendPost(){
-  let txt=document.getElementById("postText").value.trim();
-  if(!txt) return;
-  await reqMolt("/posts","POST",{content:txt});
-  document.getElementById("postText").value="";
-  loadFeed();
+// Start app
+function startApp(){
+  document.getElementById("loginCard").style.display="none";
+  document.getElementById("appCard").style.display="block";
+  document.getElementById("agentStatus").innerText=AGENT_NAME;
+  setInterval(refreshFeed,15000);
+  setInterval(heartbeat,30000);
+  setInterval(autoDailyPost,86400000);
+  heartbeat();
+  refreshFeed();
 }
 
-// Like
-async function likePost(id){await reqMolt(`/posts/${id}/like`,"POST"); loadFeed();}
-
-// Manual reply
-async function replyManual(id){
-  let t=prompt("Reply"); 
-  if(!t) return; 
-  let ans=await generateAI(t); 
-  await reqMolt(`/posts/${id}/reply`,"POST",{content:ans}); 
-  MEMORY.push("User: "+t); MEMORY.push("Agent: "+ans); saveMemory(); loadFeed();
-}
-
-// Auto reply
-async function autoReply(post){
-  replied.add(post.id);
-  MEMORY.push("User: "+post.content);
-  let ans=await generateAI(post.content);
-  MEMORY.push("Agent: "+ans);
-  saveMemory();
-  await reqMolt(`/posts/${post.id}/reply`,"POST",{content:ans});
+// Theme toggle
+function toggleTheme(){
+  document.body.classList.toggle("light");
+  localStorage.theme=document.body.classList.contains("light")?"light":"dark";
 }
 
 // Heartbeat
 async function heartbeat(){
-  let s=await reqMolt("/agents/status");
-  document.getElementById("status").innerText=s.status;
+  let stat=await moltReq("/agents/status");
+  document.getElementById("heartbeat").innerText="Status: "+stat.status;
 }
 
-// Daily post
-async function dailyPost(){
+// Refresh feed
+async function refreshFeed(){
+  let data=await moltReq("/posts");
+  const feed=document.getElementById("feedContainer");
+  feed.innerHTML="";
+  if(!data.posts) return;
+  let statsText=`Posts: ${data.posts.length}`;
+  document.getElementById("feedStats").innerText=statsText;
+  data.posts.forEach(p=>{
+    let d=document.createElement("div");
+    d.className="card feed-post";
+    d.innerHTML=`<b>@${p.author.name}</b><p>${p.content}</p>
+      <div class="small">
+        <span onclick="likePost('${p.id}')">❤️ ${p.likes||0}</span>
+        <span onclick="replyPost('${p.id}')">Reply</span>
+      </div>`;
+    feed.appendChild(d);
+    if(p.replies) p.replies.forEach(r=>{
+      let rr=document.createElement("div"); rr.className="small";
+      rr.innerText=r.author.name+": "+r.content;
+      d.appendChild(rr);
+    });
+  });
+}
+
+// Post
+async function submitPost(){
+  let txt=document.getElementById("postInput").value.trim();
+  if(!txt) return;
+  await moltReq("/posts","POST",{content:txt});
+  refreshFeed();
+}
+
+// Like
+async function likePost(id){
+  await moltReq(`/posts/${id}/like`,"POST");
+  refreshFeed();
+}
+
+// Reply (manual with Gemini)
+async function replyPost(id){
+  let txt=prompt("Reply text:");
+  if(!txt) return;
+  let aiText=await generateAI(txt);
+  await moltReq(`/posts/${id}/reply`,"POST",{content:aiText});
+  MEMORY.push("Reply to "+id+": "+aiText);
+  saveMemory();
+  refreshFeed();
+}
+
+// Gemini generate
+async function generateAI(text){
+  let mode=localStorage.getItem("mode")||"friendly";
+  let persona=localStorage.getItem("persona")||"";
+  let modeText={
+    friendly:"Friendly tone.",
+    professional:"Professional.",
+    sarcastic:"Sarcastic.",
+    motivational:"Motivational."
+  }[mode];
+  let prompt=modeText+"\n"+persona+"\n"+text;
+  try{
+    let res=await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+encodeURIComponent(GEM_KEY),
+      {
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-goog-api-key":GEM_KEY},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+      }
+    );
+    let j=await res.json();
+    return j.candidates?.[0]?.content?.parts?.[0]?.text||"";
+  }catch(e){return "";}
+}
+
+// Daily auto post
+async function autoDailyPost(){
   let now=Date.now();
-  if(now-lastPost<86400000) return;
-  lastPost=now;
-  let text=await generateAI("Write short daily motivational post");
-  await reqMolt("/posts","POST",{content:text});
-  MEMORY.push("Daily Post: "+text);
+  if(now-lastDaily<86400000) return;
+  lastDaily=now;
+  let text=await generateAI("Write a short daily motivational post");
+  await moltReq("/posts","POST",{content:text});
+  MEMORY.push("Daily: "+text);
   saveMemory();
 }
 
-// Toggle AI
-function toggleAI(){AUTO=!AUTO; alert("Auto Reply "+(AUTO?"ON":"OFF"));}
+window.onload = ()=>{
+  if(localStorage.getItem("moltbook_key")) document.getElementById("apikey").value=localStorage.getItem("moltbook_key");
+  if(localStorage.getItem("gemini_key")) document.getElementById("gemkey").value=localStorage.getItem("gemini_key");
+  loadMemory();
+};
 </script>
 
 </body>
