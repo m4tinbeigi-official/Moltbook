@@ -4,25 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Moltbook AI Ultimate Full</title>
-<link rel="manifest" href="data:application/json,{
-'name':'Moltbook AI Ultimate',
-'short_name':'Moltbook',
-'start_url':'.',
-'display':'standalone',
-'background_color':'#0e0e0e',
-'theme_color':'#ff6a00'
-}">
 <style>
 :root{
---bg:#0e0e0e;
---card:#1b1b1b;
---text:#fff;
---accent:#ff6a00;
+--bg:#0e0e0e;--card:#1b1b1b;--text:#fff;--accent:#ff6a00;
 }
 .light{
---bg:#f2f2f2;
---card:#fff;
---text:#111;
+--bg:#f2f2f2;--card:#fff;--text:#111;
 }
 body{margin:0;font-family:Arial;background:var(--bg);color:var(--text);}
 header{padding:12px;background:var(--card);text-align:center;font-weight:bold;}
@@ -76,6 +63,7 @@ button{background:var(--accent);color:white;font-weight:bold;cursor:pointer;}
 <div class="card" id="memory"></div>
 <div id="feed"></div>
 </div>
+
 </div>
 
 <script>
@@ -103,28 +91,50 @@ function logout(){localStorage.clear();location.reload()}
 // Toggle Auto
 function toggleAI(){AUTO=!AUTO;alert("Auto reply "+(AUTO?"ON":"OFF"))}
 
-// API Request
-async function req(p,m="GET",b){
-let o={method:m,headers:{Authorization:"Bearer "+API,"Content-Type":"application/json"}}
-if(b)o.body=JSON.stringify(b)
-return fetch("https://www.moltbook.com"+p,o).then(r=>r.json())
+// Moltbook API Request (use www subdomain to preserve Authorization header) 3
+async function req(path, method="GET", body=null){
+  let options={method,headers:{
+    Authorization:"Bearer "+API,
+    "Content-Type":"application/json"
+  }}
+  if(body) options.body=JSON.stringify(body)
+  let res=await fetch("https://www.moltbook.com/api/v1"+path, options)
+  return res.json()
 }
 
-// Gemini AI
-async function gemini(text){
-let persona=localStorage.persona||"You are friendly AI agent"
-let modeText={
-friendly:"You are friendly and warm.",
-professional:"You are professional and concise.",
-sarcastic:"You reply with light sarcasm.",
-motivational:"You are motivational coach."
-}[localStorage.mode||"friendly"]
-let prompt=modeText+"\n"+persona+"\nMemory:\n"+MEMORY.join("\n")+"\nUser:\n"+text
-let r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key="+GEM,{
-method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
-})
-let j=await r.json()
-return j.candidates[0].content.parts[0].text
+// Gemini API call using REST with x-goog-api-key header 4
+async function gemini(promptText){
+  let modeText={
+    friendly:"Friendly tone.",
+    professional:"Professional.",
+    sarcastic:"Sarcastic tone.",
+    motivational:"Motivational."
+  }[localStorage.mode||"friendly"]
+  let persona=localStorage.persona||"You are a helpful AI."
+  let prompt = modeText+"\n"+persona+"\nUser: "+promptText
+
+  try {
+    let resp=await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "x-goog-api-key":GEM
+        },
+        body: JSON.stringify({
+          contents:[
+            { role:"user", parts:[{text:prompt}] }
+          ]
+        })
+      }
+    )
+    let data=await resp.json()
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ""
+  } catch(e){
+    console.error("Gemini error",e)
+    return ""
+  }
 }
 
 // Memory
@@ -140,47 +150,55 @@ await profile();heartbeat();load()
 setInterval(load,15000);setInterval(heartbeat,30000);setInterval(dailyPost,60000)
 }
 
-// Profile
-async function profile(){let m=await req("/api/v1/agents/me");AGENT=m.agent.name;agent.innerText=AGENT}
+async function profile(){
+let m=await req("/agents/me")
+AGENT=m.agent.name;agent.innerText=AGENT
+}
 
-// Heartbeat
-async function heartbeat(){let s=await req("/api/v1/agents/status");status.innerText=s.status}
+async function heartbeat(){
+let s=await req("/agents/status")
+status.innerText=s.status
+}
 
-// Load feed
 async function load(){
-let d=await req("/api/v1/posts")
+let d=await req("/posts")
 feed.innerHTML=""
 let likes=0,replies=0
-d.posts.forEach(p=>{likes+=p.likes||0;replies+=p.replies?p.replies.length:0;render(p)})
+d.posts.forEach(p=>{likes+=p.likes||0;replies+=p.replies?.length||0;render(p)})
 stats.innerText="Posts "+d.posts.length+" Likes "+likes+" Replies "+replies
 if(AUTO)autoReply(d.posts)
 }
 
-// Render post
 function render(p){
 let e=document.createElement("div");e.className="card post"
 e.innerHTML=`<b>@${p.author.name}</b><div>${linkMentions(p.content)}</div>
 <div class="small"><span onclick="like('${p.id}')">❤️ ${p.likes||0}</span> <span onclick="replyManual('${p.id}')">Reply</span></div>`
 feed.appendChild(e)
-if(p.replies)p.replies.forEach(r=>{let rr=document.createElement("div");rr.className="reply";rr.innerText=r.author.name+": "+r.content;e.appendChild(rr)})
+p.replies?.forEach(r=>{
+  let rr=document.createElement("div")
+  rr.className="reply";rr.innerText=r.author.name+": "+r.content
+  e.appendChild(rr)
+})
 }
 
-// Link mentions
 function linkMentions(t){return t.replace(/@(\w+)/g,'<b>@$1</b>')}
 
-// Send post
-async function send(){if(!post.value)return;await req("/api/v1/posts","POST",{content:post.value});post.value="";load()}
+async function send(){
+if(!post.value)return
+await req("/posts","POST",{content:post.value})
+post.value="";load()
+}
 
-// Like
-async function like(id){await req(`/api/v1/posts/${id}/like`,"POST");load()}
+async function like(id){await req(`/posts/${id}/like`,"POST");load()}
 
-// Manual reply
-function replyManual(id){let t=prompt("Reply");if(!t)return;req(`/api/v1/posts/${id}/reply`,"POST",{content:t}).then(load)}
+function replyManual(id){
+let t=prompt("Reply");if(!t)return
+req(`/posts/${id}/reply`,"POST",{content:t}).then(load)
+}
 
-// Auto reply
 async function autoReply(posts){
-let hour=new Date().getHours()
-if(hour>=1 && hour<=7)return // sleep
+let h=new Date().getHours()
+if(h>=1 && h<=7)return
 for(let p of posts){
 if(replied.has(p.id))continue
 if(p.content.includes("@"+AGENT)){
@@ -190,17 +208,16 @@ MEMORY.push("User: "+p.content)
 let ans=await gemini(p.content)
 MEMORY.push("Agent: "+ans)
 saveMemory()
-await req(`/api/v1/posts/${p.id}/reply`,"POST",{content:ans})
-}}}
+await req(`/posts/${p.id}/reply`,"POST",{content:ans})
+}}
+}
 
-// Daily post
 async function dailyPost(){
 let now=Date.now()
 if(now-lastPost<86400000)return
-lastPost=now
-localStorage.lastpost=now
+lastPost=now;localStorage.lastpost=now
 let text=await gemini("Write short daily motivational post")
-await req("/api/v1/posts","POST",{content:text})
+await req("/posts","POST",{content:text})
 }
 </script>
 </body>
